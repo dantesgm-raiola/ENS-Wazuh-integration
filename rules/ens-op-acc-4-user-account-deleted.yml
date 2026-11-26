@@ -1,0 +1,61 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "5564a636-587e-4a55-81f2-a87e4144959e"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "1a6cf4c1-002c-442a-833e-116acc2177b1"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "medium"
+
+metadata:
+  title: "ENS op.acc.4: User account deleted"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A local user account was deleted: Linux userdel or Windows Security 4726. Evidence for ENS
+    op.acc.4. Fixes the 4.x rule, which hooked rule 5902 (new user).
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100231"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "(selection_linux or selection_windows) and not filter_lenovo_tmp"
+  selection_linux:
+    wazuh.integration.name: "linux"
+    process.name: "userdel"
+    event.type: "deletion"
+  selection_windows:
+    wazuh.integration.name: "windows"
+    event.action: "user-deleted"
+  filter_lenovo_tmp:
+    user.target.name|startswith: "lenovo_tmp_"
+
+mitre:
+  tactic:
+    - "TA0040"
+  technique:
+    - "T1531"
+  subtechnique: []
+
+compliance:
+  nis2:
+    - "21.2.i"
+
+tags:
+  - "ens.op.acc.4"
+  - "iso27001-2022.5.18"
+  - "attack.impact"
+  - "attack.t1531"
+
+falsepositives:
+  - "Package removals deleting system users"
+  - "Lenovo Vantage / System Update creates, adds to Administrators and deletes temporary local accounts named lenovo_tmp_* (seen 2026-08..11 on GR-*/RN-* laptops)."

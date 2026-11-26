@@ -1,0 +1,59 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "f13b9cf9-bd9c-4633-929f-67ce81851f85"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "37fe0487-d54d-40b7-94e4-cf11b7283c9f"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "low"
+
+metadata:
+  title: "ENS op.exp.5: New Windows service installed"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A new service was installed on a Windows host (System 7045). Change evidence for ENS op.exp.5 /
+    mp.s.2 and a common persistence technique. Replaces 4.x rules 100600/100601, which hooked the
+    Wazuh agent's own start/stop events (rules 502/503).
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100600"
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100601"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "windows"
+    event.code: "7045"
+
+mitre:
+  tactic:
+    - "TA0003"
+  technique:
+    - "T1543"
+  subtechnique:
+    - "T1543.003"
+
+compliance:
+  nis2:
+    - "21.2.e"
+
+tags:
+  - "ens.op.exp.5"
+  - "ens.mp.s.2"
+  - "iso27001-2022.8.32"
+  - "iso27001-2022.8.26"
+  - "attack.persistence"
+  - "attack.t1543.003"
+
+falsepositives:
+  - "Software installs and updates (McAfee scheduled tasks were the main source here)"

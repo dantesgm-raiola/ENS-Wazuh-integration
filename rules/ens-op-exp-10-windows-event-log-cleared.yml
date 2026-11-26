@@ -1,0 +1,60 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "087066fd-b6a2-4151-a839-a90684f2e966"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "492b99e4-0f17-4b67-a7a0-69b3dbc345d6"
+detector_index: "wazuh-events-v5-system-activity"
+# event.code values 1102/104 were not present in the indexed data (90 days); the field
+# carries the Windows EventID for every other code seen (4720, 4732, 7045...).
+
+enabled: true
+status: "experimental"
+level: "high"
+
+metadata:
+  title: "ENS op.exp.10: Windows event log cleared"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    The Windows Security log (1102) or System log (104) was cleared. Evidence for ENS op.exp.10
+    (protection of activity logs). Replaces the 4.x 'log file deleted' rule, which needed FIM on
+    /var/log (not monitored here).
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100340"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "windows"
+    event.code:
+      - "1102"
+      - "104"
+
+mitre:
+  tactic:
+    - "TA0005"
+  technique:
+    - "T1070"
+  subtechnique:
+    - "T1070.001"
+
+compliance:
+  nis2:
+    - "21.2.b"
+
+tags:
+  - "ens.op.exp.10"
+  - "iso27001-2022.8.15"
+  - "attack.defense-evasion"
+  - "attack.t1070.001"
+
+falsepositives:
+  - "Administrators clearing logs during maintenance"

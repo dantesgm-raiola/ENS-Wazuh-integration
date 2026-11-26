@@ -1,0 +1,64 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "dba5a977-46c2-4e17-9add-f81a26510583"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "176f5fb9-4596-43f5-8feb-d5d56db2b1b9"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "low"
+
+metadata:
+  title: "ENS op.acc.4: User account modified"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A local user account was modified, enabled or disabled: Linux usermod or Windows Security
+    4738/4722/4725. Evidence for ENS op.acc.4. Fixes the 4.x rule, which hooked rule 5903 (user
+    deleted).
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100232"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "(selection_linux or selection_windows) and not filter_lenovo_tmp"
+  selection_linux:
+    wazuh.integration.name: "linux"
+    process.name: "usermod"
+  selection_windows:
+    wazuh.integration.name: "windows"
+    event.action:
+      - "user-modified"
+      - "user-enabled"
+      - "user-disabled"
+  filter_lenovo_tmp:
+    user.target.name|startswith: "lenovo_tmp_"
+
+mitre:
+  tactic:
+    - "TA0003"
+  technique:
+    - "T1098"
+  subtechnique: []
+
+compliance:
+  nis2:
+    - "21.2.i"
+
+tags:
+  - "ens.op.acc.4"
+  - "iso27001-2022.5.18"
+  - "attack.persistence"
+  - "attack.t1098"
+
+falsepositives:
+  - "Routine account administration"
+  - "Lenovo Vantage / System Update creates, adds to Administrators and deletes temporary local accounts named lenovo_tmp_* (seen 2026-08..11 on GR-*/RN-* laptops)."

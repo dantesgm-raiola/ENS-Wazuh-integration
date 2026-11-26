@@ -1,0 +1,64 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "4183f73f-6bb6-489b-a12a-8b7da79c3587"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "fe70abd1-710c-4975-ba51-91d644bff0cf"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "medium"
+
+metadata:
+  title: "ENS op.acc.4: User account created"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A local user account was created: Linux useradd (event.category iam, event.type creation) or
+    Windows Security 4720. Evidence for ENS op.acc.4 (access rights management). Fixes the 4.x rule,
+    which hooked rule 5901 (new group).
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100230"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "(selection_linux or selection_windows) and not filter_lenovo_tmp"
+  selection_linux:
+    wazuh.integration.name: "linux"
+    process.name: "useradd"
+    event.type: "creation"
+  selection_windows:
+    wazuh.integration.name: "windows"
+    event.action: "user-created"
+  filter_lenovo_tmp:
+    user.target.name|startswith: "lenovo_tmp_"
+
+mitre:
+  tactic:
+    - "TA0003"
+  technique:
+    - "T1136"
+  subtechnique:
+    - "T1136.001"
+
+compliance:
+  nis2:
+    - "21.2.i"
+
+tags:
+  - "ens.op.acc.4"
+  - "iso27001-2022.5.18"
+  - "iso27001-2022.5.16"
+  - "attack.persistence"
+  - "attack.t1136.001"
+
+falsepositives:
+  - "Package installs creating system users (useradd for daemons)"
+  - "Lenovo Vantage / System Update creates, adds to Administrators and deletes temporary local accounts named lenovo_tmp_* (seen 2026-08..11 on GR-*/RN-* laptops)."

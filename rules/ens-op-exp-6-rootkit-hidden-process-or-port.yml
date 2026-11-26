@@ -1,0 +1,63 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "cd3419ab-4c95-4068-bbc2-79f4b7327ef8"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "4ojnFKIBHEAyeSYysu7b"
+sa_native_id: "ada720f3-2555-48cf-b16d-6bada6c28b3b"
+detector_index: "wazuh-events-v5-security"
+
+enabled: true
+status: "experimental"
+level: "medium"
+
+metadata:
+  title: "ENS op.exp.6: Rootkit indicator - hidden process or port"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    Rootcheck reported a process hidden from /proc or a port hidden from netstat, the classic
+    kernel-rootkit indicators. Evidence for ENS op.exp.6 (protection against malicious code).
+    Rootcheck 'file' indicators are deliberately excluded: in this deployment they are dominated by
+    the check_files link-count anomaly (about 520k events in 90 days) and the trojaned-binary text
+    is only in event.original, which is not indexed and cannot be matched.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100310"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "wazuh-rootcheck"
+    event.action: "malware-detected"
+    threat.indicator.type:
+      - "process"
+      - "port"
+
+mitre:
+  tactic:
+    - "TA0005"
+  technique:
+    - "T1014"
+  subtechnique: []
+
+compliance:
+  nis2:
+    - "21.2.b"
+
+tags:
+  - "ens.op.exp.6"
+  - "ens.op.mon.1"
+  - "iso27001-2022.8.7"
+  - "iso27001-2022.8.16"
+  - "attack.defense-evasion"
+  - "attack.t1014"
+
+falsepositives:
+  - "1,213 matches in 90 days across 19 agents on the reference deployment, mostly hidden-port reports; review before raising the level"
+  - "Short-lived processes or ports that appear between rootcheck's two reads (race), common on busy hosts"

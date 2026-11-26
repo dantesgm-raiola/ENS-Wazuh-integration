@@ -1,0 +1,59 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "816b3a19-063b-4c46-8060-bdee86f369da"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "84483d68-6b0e-4c59-8fb7-040ea93fbcfa"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "medium"
+
+metadata:
+  title: "ENS op.acc.3: sudo authentication failure"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A user failed to authenticate to sudo (pam_unix(sudo:auth) failure). Possible unauthorised
+    privilege escalation attempt (ENS op.acc.3). Fixes the 4.x rule, which hooked rule 5402 (sudo
+    success) and labelled it failure.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100221"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "linux"
+    process.name: "sudo"
+    event.outcome: "failure"
+
+mitre:
+  tactic:
+    - "TA0004"
+  technique:
+    - "T1548"
+  subtechnique:
+    - "T1548.003"
+
+compliance:
+  nis2:
+    - "21.2.i"
+
+tags:
+  - "ens.op.acc.3"
+  - "ens.op.acc.6"
+  - "iso27001-2022.5.3"
+  - "iso27001-2022.8.5"
+  - "attack.privilege-escalation"
+  - "attack.t1548.003"
+
+falsepositives:
+  - "Mistyped sudo password"
