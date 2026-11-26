@@ -39,12 +39,13 @@ pip install pyyaml
 python3 tests/validate_sca.py sca/ens_linux.yml sca/ens_windows.yml
 ```
 
-The validator checks:
-- YAML syntax
-- Required fields (`id`, `title`, `description`, `compliance`, `condition`, `rules`)
-- Check ID uniqueness across both files
-- Valid ENS levels (`Básico`, `Medio`, `Alto`)
-- Presence of `ens` and `ens_nivel` compliance tags
+The validator checks what the Wazuh 5.x agent accepts:
+- YAML syntax, policy fields, and `policy.file` matching the file name
+- Check fields (`id`, `name`, `description`, `condition`, `rules`); the 4.x `title` is rejected
+- Check ID uniqueness across all policy files
+- `compliance` is a mapping that uses only the keys the 5.x agent keeps
+- ENS tagging: `ens:<control>` and `ens-level:<level>` in `references`, matching the name suffix
+- Rule syntax: known rule types, `n:<regex> compare <op> <int>` shape, regexes compile
 
 ---
 
@@ -69,25 +70,40 @@ New families not listed above: open an issue first to agree on a range.
 
 ### Required structure
 
-Every check must include the `ens` and `ens_nivel` compliance tags. Example:
+ENS tagging goes in `references` (the 5.x SCA schema drops unknown `compliance` keys such as
+`ens`). Example:
 
 ```yaml
 - id: 30036
-  title: "Ensure SSH MaxAuthTries is set to 4 or less [op.acc.6] [Básico]"
+  name: "Ensure SSH MaxAuthTries is set to 4 or less [op.acc.6] [Básico]"
   description: "Limit the number of authentication attempts per connection."
   rationale: "Reduces exposure to brute-force attacks. Required by ENS op.acc.6."
-  remediation: "Set 'MaxAuthTries 4' in /etc/ssh/sshd_config and restart sshd."
+  remediation: "Set 'MaxAuthTries 4' in /etc/ssh/sshd_config and reload sshd."
+  references:
+    - "ens:op.acc.6"
+    - "ens-level:basico"
+    - "iso27001-2022:8.5"
   compliance:
-    - ens: "op.acc.6"
-    - ens_nivel: "Básico"
+    nis2: ["21.2.i"]
   condition: all
   rules:
-    - 'f:$sshd_config -> r:^\s*MaxAuthTries\s+[1-4]\s*$'
+    - 'c:sshd -T -> n:^maxauthtries\s+(\d+) compare <= 4'
 ```
 
-**Title format:** `"<description> [<ens_control>] [<level>]"` — the tags in brackets make the check self-describing in the Wazuh UI.
+**Name format:** `"<description> [<ens_control>] [<level>]"`, with the same controls and level
+as the `ens:` / `ens-level:` references.
 
-**ENS level values** (case-sensitive): `Básico`, `Medio`, `Alto`.
+**Level values:** `Básico`, `Medio`, `Alto` in the name; `basico`, `medio`, `alto` in
+`ens-level:`.
+
+**Compliance keys:** only `cmmc, fedramp, gdpr, hipaa, iso_27001, nis2, nist_800_171,
+nist_800_53, pci_dss, tsc`. Use the NIS2 table in `docs/controls_mapping.md`. Don't put
+ISO 27001:2022 numbers in `iso_27001` (use the `iso27001-2022:` reference).
+
+**Regexes** are PCRE2, case-insensitive and multi-line on 5.x. `d:/dir -> r:X` matches file
+*names*; to match file contents use `d:/dir -> r:<file-name-regex> -> r:<content-regex>`.
+Prefer `f:` reads (`/proc/sys/...`, config files) and `p:` process checks over `c:` commands:
+command checks need `sca.remote_commands=1` on every agent.
 
 ### Guidelines
 
@@ -101,67 +117,33 @@ Every check must include the `ens` and `ens_nivel` compliance tags. Example:
 
 ## Contributing detection rules
 
-Detection rules live in `rules/ens_detection_rules.xml` and follow the standard [Wazuh rules format](https://documentation.wazuh.com/current/user-manual/ruleset/custom-rules/).
+Detection rules are Sigma YAML files in `rules/`, one per rule, for the Wazuh 5.x content
+manager. See [docs/detection_rules_5x.md](docs/detection_rules_5x.md) for the format, the
+deployment-state header that `tools/deploy_rules.py` fills in, and the deploy steps.
 
-### Rule ID ranges
-
-| ENS family | ID range        |
-|------------|-----------------|
-| op.acc     | 100200 – 100299 |
-| op.exp     | 100300 – 100399 |
-| op.mon     | 100400 – 100499 |
-| mp.com     | 100500 – 100599 |
-| mp.s       | 100600 – 100699 |
-
-### Required tags
-
-Every rule must carry the `ENS_` group tag and the specific control tag:
-
-```xml
-<rule id="100205" level="10">
-  <if_group>authentication_failed</if_group>
-  <match>Failed password</match>
-  <description>ENS op.acc.6: Multiple failed SSH authentication attempts</description>
-  <group>ENS_op_acc,ENS_op_acc_6,authentication_failed,</group>
-</rule>
-```
-
-**Group naming convention:**
-- Family group: `ENS_<family>` (e.g. `ENS_op_acc`)
-- Control group: `ENS_<family>_<control>` (e.g. `ENS_op_acc_6`)
-
-Both groups must be present. The `ENS_*` prefix is what the dashboard uses to filter alerts.
+- `logsource.product` must be `ens-compliance` (the custom integration's title).
+- Match on Wazuh Common Schema fields you have seen in real events (`wazuh-events-v5-*`); the
+  content manager rejects unknown fields.
+- `tags`: `ens.<control>` for each ENS control and `iso27001-2022.<control>`; the detections
+  dashboard filters on `ens.*`.
+- `compliance` accepts the same fixed keys as SCA. No `ens` key.
+- Event correlation (frequency, timeframe) isn't available in 5.x rules: use an OpenSearch
+  Alerting bucket-level monitor instead.
 
 ---
 
 ## Contributing to the dashboard
 
-The dashboard is exported as `dashboards/ens_dashboard.ndjson` (OpenSearch saved objects).
-
-To modify it:
-1. Import the current `ens_dashboard.ndjson` into your OpenSearch Dashboards instance.
-2. Make your changes in the UI.
-3. Export the updated objects: **Stack Management → Saved Objects → Export**.
-4. Select all ENS objects and export as NDJSON.
-5. Before committing, run the following to strip the `migrationVersion` field (causes import errors on older versions):
+The dashboards are generated by `dashboards/build_dashboards.py`. Edit the script, regenerate,
+and validate:
 
 ```bash
-python3 - <<'EOF'
-import json
-with open('dashboards/ens_dashboard.ndjson') as f:
-    lines = [l.strip() for l in f if l.strip()]
-out = []
-for line in lines:
-    obj = json.loads(line)
-    obj.pop('migrationVersion', None)
-    out.append(json.dumps(obj, ensure_ascii=False))
-with open('dashboards/ens_dashboard.ndjson', 'w') as f:
-    f.write('\n'.join(out) + '\n')
-print(f"Processed {len(out)} objects.")
-EOF
+python3 dashboards/build_dashboards.py
+python3 dashboards/build_dashboards.py --check
 ```
 
-Any new visualization that references ENS compliance fields (`data.sca.check.compliance.ens`, `data.sca.check.compliance.ens_nivel`, etc.) should also be added to the `fields` list in the `index-pattern` object within the ndjson.
+Keep object ids under the `ens-5x-` prefix, and check the panels on a live Wazuh 5.x dashboard
+before submitting.
 
 ---
 

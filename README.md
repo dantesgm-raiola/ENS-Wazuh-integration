@@ -1,6 +1,6 @@
 # ENS Wazuh Integration
 
-[![Wazuh](https://img.shields.io/badge/Wazuh-4.x-blue)](https://wazuh.com)
+[![Wazuh](https://img.shields.io/badge/Wazuh-5.x-blue)](https://wazuh.com)
 [![License](https://img.shields.io/badge/License-GPL--2.0-green)](LICENSE)
 [![ENS](https://img.shields.io/badge/ENS-RD%20311%2F2022-red)](https://www.boe.es/boe/dias/2022/05/03/pdfs/BOE-A-2022-7191.pdf)
 
@@ -35,370 +35,204 @@ ENS covers three control families: **[org]** Organizational, **[op]** Operationa
 
 | Component | Description |
 |-----------|-------------|
-| **SCA Policies** | YAML policies for Linux and Windows agents that audit system configuration against ENS controls |
-| **Detection Rules** | Custom Wazuh rules tagged with ENS control references |
-| **Control Mapping** | Full reference table mapping ENS controls to Wazuh checks and rules |
-| **ISO 27001 Mapping** | Every SCA check and detection rule is also tagged with its equivalent ISO/IEC 27001:2022 Annex A control ([docs/iso27001_mapping.md](docs/iso27001_mapping.md)) |
-| **Dashboards** | OpenSearch dashboards for ENS compliance visualization |
-| **API Sync Tool** | Bridge script that indexes check-level SCA data into a dedicated OpenSearch index for rich dashboards |
+| **SCA policies** | `sca/ens_linux.yml` (60 checks) and `sca/ens_windows.yml` (17 checks), pushed to agents through two agent groups |
+| **Detection rules** | Sigma rules for the Wazuh 5.x content manager (`rules/`), tagged with ENS controls, deployed by `tools/deploy_rules.py` |
+| **Dashboards** | SCA compliance and ENS detections dashboards built on the indices Wazuh 5.x writes natively (`dashboards/`) |
+| **Control mapping** | ENS ↔ Wazuh checks/rules ([docs/controls_mapping.md](docs/controls_mapping.md)) and ENS ↔ ISO/IEC 27001:2022 ([docs/iso27001_mapping.md](docs/iso27001_mapping.md)) |
+
+There is no sync tool any more: on Wazuh 5.x the agent writes every SCA check result to the
+`wazuh-states-sca` index, and detection rules produce findings in `wazuh-findings-v5-*`.
 
 ---
 
 ## Supported versions
 
-- **Wazuh**: 4.4 or later (4.7+ recommended)
-- **Agents**: Linux (RHEL/CentOS/Debian/Ubuntu/Kali), Windows 10/11/Server 2019+
-- **OpenSearch**: 2.x (for dashboards)
+- **Wazuh 5.x** (manager in `/var/wazuh-manager`, rules in the Indexer content manager). Built
+  against the v5.0.0 SCA module and the live `wazuh-states-sca` index schema.
+- **Agents**: Linux (Debian/Ubuntu/RHEL family) and Windows 10/11/Server 2016+, version 5.x.
+- **Wazuh 4.x**: use the `main` branch / 4.x releases. Nothing on this branch installs on 4.x.
+
+Upgrading from the 4.x version of this project: read [docs/MIGRATION_5x.md](docs/MIGRATION_5x.md).
 
 ---
 
-## Installation overview
+## How ENS data is stored on Wazuh 5.x
 
-The integration has two phases:
+The `wazuh-states-sca` index has a strict mapping, and the 5.x agent keeps only these
+`compliance` keys: `cmmc, fedramp, gdpr, hipaa, iso_27001, nis2, nist_800_171, nist_800_53,
+pci_dss, tsc`. Any other key, such as the `ens`/`ens_nivel` keys the 4.x policies used, is
+dropped with an `Invalid compliance key` warning. So ENS tagging lives in fields the schema
+does accept:
 
-| Phase | Script | What it does |
-|-------|--------|--------------|
-| **1 — Core** | `install.sh` | Installs SCA policies, detection rules, and configures the manager |
-| **2 — Sync** | `install_sync.sh` | Installs the API bridge, cron job, and check-level dashboard |
+| Where | Value | Example |
+|---|---|---|
+| Check name | `[<control>] [<level>]` suffix | `Ensure SSH root login is disabled [op.acc.1] [Básico]` |
+| `check.references` | `ens:<control>` (one per control) | `ens:op.acc.1` |
+| `check.references` | `ens-level:<basico\|medio\|alto>` | `ens-level:basico` |
+| `check.references` | `iso27001-2022:<control>` | `iso27001-2022:5.16` |
+| `check.compliance.nis2` | NIS2 Art. 21.2 letter, mapped per ENS family | `21.2.i` |
+| Detection rules | `wazuh.rule.tags`: `ens.<control>`, `iso27001-2022.<control>` | `ens.op.acc.6` |
+
+ISO/IEC 27001:2022 numbers are deliberately **not** put in `check.compliance.iso_27001`: Wazuh's
+own policies fill that field with 2013-style numbers (`A.12.1.1`), and mixing both numbering
+schemes in one field would make it unusable. The NIS2 values are an approximate, family-level
+mapping (see [docs/controls_mapping.md](docs/controls_mapping.md)).
+
+Example queries:
+
+```
+GET wazuh-states-sca/_search?q=policy.id:ens_linux AND check.result:Failed
+GET wazuh-states-sca/_search?q=check.references:"ens:op.acc.6"
+GET wazuh-findings-v5-*/_search?q=wazuh.rule.tags:ens.*
+```
 
 ---
 
-## Phase 1 — Core installation
+## Installation
 
-### Automated
+| Step | Where | What |
+|---|---|---|
+| 1. SCA policies | Manager, as root | `sudo ./install.sh` |
+| 2. Command checks | Each agent, as root/admin | `tools/agent_enable_sca_commands.sh` / `.ps1` |
+| 3. Detection rules | Anywhere that reaches the Indexer | `python3 tools/deploy_rules.py` |
+| 4. Dashboards | Wazuh dashboard | import `dashboards/*.ndjson` |
+
+### 1. SCA policies (manager)
 
 ```bash
-git clone https://github.com/fredycibersec/ENS-Wazuh-integration.git
+git clone -b wazuh-5.0-migration https://github.com/fredycibersec/ENS-Wazuh-integration.git
 cd ENS-Wazuh-integration
-sudo bash install.sh
+sudo ./install.sh --dry-run          # preview
+sudo ./install.sh --linux-agents 001,002 --windows-agents 010
+sudo ./install.sh --groups servers,proxmox   # every member of these groups, placed by OS
 ```
 
-The installer:
-1. Copies SCA policies to `/var/ossec/ruleset/sca/`
-2. Copies detection rules to `/var/ossec/etc/rules/`
-3. Updates `ossec.conf` to enable the ENS SCA policies
-4. Restarts the Wazuh manager
+`--groups` takes existing Wazuh groups and adds each current member to `ens-linux` or
+`ens-windows` according to the OS recorded by the manager. It skips macOS agents and agents that
+have not reported their OS yet. The OS family comes from `os_type`, falling back to
+`os_platform` (some 5.0 Windows agents leave `os_platform` empty). It reads membership from the manager's agent database
+(`queue/db/global.db`, read-only) and never touches the source groups' own files, so a group
+`agent.conf` managed by other tooling (Ansible, etc.) stays intact. It is a snapshot: agents
+that join those groups later are not added until you run the same command again. Every step is
+idempotent, so a cron job or your config-management run can repeat it safely.
 
-### Manual
+The installer registers the `ens-linux` and `ens-windows` groups with the manager's
+`agent_groups` tool, copies the policy into each group's directory, and writes a dedicated `agent.conf` per
+group. The group directories are where the manager reads them: `/etc/wazuh-manager/shared/` on
+5.0.0-1 builds published from late October 2026 on, `/var/wazuh-manager/etc/shared/` on earlier
+5.0 builds. The installer picks the right one (it checks for `/etc/wazuh-manager/wazuh-manager.conf`)
+and warns if a stale `/var/wazuh-manager/etc/shared/` is left from an upgrade; set
+`WAZUH_CONF_DIR` to override. The manager
+pushes the files to agents on its own; no restart is needed. Adding an agent to an ENS group
+keeps its other groups. It never edits a group `agent.conf` it didn't write unless you pass
+`--force` (a backup is kept in `<config dir>/ens-install-backups/`, outside the group
+directory, because every file in a group directory is pushed to its agents). The manager host isn't scanned: install an agent on it and add
+that agent to `ens-linux` if you need it.
 
-#### 1. Copy SCA policies
+Add more agents later by re-running the installer with `--linux-agents`, `--windows-agents`
+or `--groups`, or directly:
 
 ```bash
-sudo cp sca/ens_linux.yml /var/ossec/ruleset/sca/
-sudo cp sca/ens_windows.yml /var/ossec/ruleset/sca/
+sudo /var/wazuh-manager/bin/agent_groups -a -i <agent_id> -g ens-linux -q
 ```
 
-#### 2. Enable SCA policies in ossec.conf
-
-Add the following inside the `<sca>` block in `/var/ossec/etc/ossec.conf`:
-
-```xml
-<sca>
-  <enabled>yes</enabled>
-  <scan_on_start>yes</scan_on_start>
-  <interval>12h</interval>
-  <skip_nfs>yes</skip_nfs>
-  <policies>
-    <policy>ruleset/sca/ens_linux.yml</policy>
-    <policy>ruleset/sca/ens_windows.yml</policy>
-  </policies>
-</sca>
-```
-
-#### 3. Copy detection rules
+<details>
+<summary>Manual installation</summary>
 
 ```bash
-sudo cp rules/ens_detection_rules.xml /var/ossec/etc/rules/
-```
-
-#### 4. Import the summary dashboard
-
-1. Open OpenSearch Dashboards (usually `https://<wazuh-ip>`)
-2. Go to **Stack Management → Saved Objects → Import**
-3. Upload `dashboards/ens_dashboard.ndjson`
-4. Navigate to **Dashboards → ENS — Esquema Nacional de Seguridad**
-
-> **Note:** The NDJSON uses the `wazuh-alerts-*` index pattern that Wazuh creates automatically. It only shows policy-level scores and detection-rule alerts — data Wazuh reliably indexes on its own. Per-control compliance detail (which specific ENS/ISO 27001 controls pass or fail, and on which agents) requires Phase 2 below, because Wazuh does not index a full snapshot of individual check results into `wazuh-alerts-*` (see the note in Phase 2).
-
-#### 5. Restart Wazuh manager
-
-```bash
-sudo systemctl restart wazuh-manager
-```
-
----
-
-## Phase 2 — API Sync Tool (check-level dashboard)
-
-Wazuh 4.x only indexes SCA **summary** events into `wazuh-alerts-*`. Individual check events (`data.sca.type: check`) are only written there on the first scan or when a check's result changes between scans — never a full snapshot — and are otherwise stored in SQLite on the manager, accessible only via the Wazuh REST API. A dashboard panel that queries `data.sca.check.*` in `wazuh-alerts-*` will therefore show sparse, inconsistent data that depends on the time range picked, not the real current state. The sync tool bridges this gap by polling the API and indexing a full, up-to-date check-level snapshot into a dedicated `ens-sca-checks` OpenSearch index on every run — this is the only reliable source for per-control compliance (ENS and ISO/IEC 27001:2022), which is why those panels live in this phase's dashboard, not in the Phase 1 summary dashboard.
-
-### Automated
-
-```bash
-sudo bash install_sync.sh
-```
-
-The installer:
-1. Detects Python 3 and installs the `requests` library if missing
-2. Reads credentials automatically from `wazuh-install-files.tar` (searched in `/root`, `/home/*`, `/tmp`, `/var/tmp`) — prompts interactively if not found
-3. Tests connectivity to the Wazuh API and OpenSearch
-4. Copies the sync script to `/opt/ENS-Wazuh-integration/tools/`
-5. Runs an initial sync
-6. Creates `/etc/cron.d/ens-sca-sync` (runs every 15 minutes as root)
-7. Imports `ens_sca_checks_dashboard.ndjson` into OpenSearch Dashboards
-
-If OpenSearch Dashboards runs on a non-default port:
-
-```bash
-sudo OSD_HOST=https://localhost:5601 bash install_sync.sh
-```
-
-### Manual setup
-
-```bash
-# Install dependency
-pip3 install requests
-
-# Run as root — credentials are read automatically from wazuh-install-files.tar
-# if it exists in /root, /home/*, /tmp or /var/tmp
-sudo python3 tools/sync_sca_to_opensearch.py --dry-run
-
-# Or pass credentials explicitly
-sudo WAZUH_USER=wazuh WAZUH_PASS='xxx' OS_USER=admin OS_PASS='xxx' \
-  python3 tools/sync_sca_to_opensearch.py
-```
-
-> **Important:** Run as `root` (or with `sudo`). The `wazuh-install-files.tar` has 700 permissions and is only readable by root.
-
-### Credentials
-
-The script reads credentials from `wazuh-install-files.tar` automatically. The required users are:
-
-| Variable | User | Source in tar |
-|----------|------|---------------|
-| `WAZUH_USER` | `wazuh` or `wazuh-wui` | `api_username:` entry |
-| `WAZUH_PASS` | (generated) | `api_password:` entry |
-| `OS_USER` | `admin` | `username: admin` entry |
-| `OS_PASS` | (generated) | `password:` entry |
-
-To verify what the tar contains:
-
-```bash
-sudo tar -xOf ~/wazuh-install-files.tar \
-  $(sudo tar -tf ~/wazuh-install-files.tar | grep -i password)
-```
-
-### Available flags
-
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Fetch data from API but do not write to OpenSearch |
-| `--diagnose` | List agents, show available SCA policies per agent, identify why 0 docs may occur |
-| `--include-manager` | Also sync SCA checks from the manager itself (agent 000) |
-
-```bash
-# Diagnose why 0 documents are indexed
-sudo python3 tools/sync_sca_to_opensearch.py --diagnose
-
-# Include the manager's own SCA results
-sudo python3 tools/sync_sca_to_opensearch.py --include-manager
-```
-
-### Cron job
-
-The automated installer creates `/etc/cron.d/ens-sca-sync`. To edit the schedule or add `--include-manager`:
-
-```bash
-sudo nano /etc/cron.d/ens-sca-sync
-```
-
-Default content:
-
-```
-*/15 * * * * root python3 /opt/ENS-Wazuh-integration/tools/sync_sca_to_opensearch.py >> /var/log/ens-sca-sync.log 2>&1
-```
-
-Watch the sync log:
-
-```bash
-tail -f /var/log/ens-sca-sync.log
-```
-
-### Import the check-level dashboard
-
-1. **Stack Management → Saved Objects → Import**
-2. Upload `dashboards/ens_sca_checks_dashboard.ndjson`
-3. Navigate to **Dashboards → ENS — SCA Check-Level Compliance**
-
-Panels included:
-
-| Panel | Description |
-|-------|-------------|
-| Passed checks | Total checks with result `passed` |
-| Pass / Fail pie | Distribution of results |
-| Results by ENS level | Stacked bar: Básico / Medio / Alto |
-| Compliance by agent | Per-agent pass/fail breakdown |
-| Top failing controls | ENS controls with most failures |
-| Failed checks table | Full list with title, level, agent, remediation |
-| ENS compliance % by control | Stacked % passed/failed per ENS control |
-| ENS control detail table | Control → nivel → resultado → agentes únicos + checks |
-| ENS compliance by agent × control | Drill-down: equipo → control ENS → resultado |
-| ISO 27001 compliance % by control | Stacked % passed/failed per ISO/IEC 27001:2022 control |
-| ISO 27001 control detail table | Control → resultado → agentes únicos + checks |
-| ISO 27001 compliance by agent × control | Drill-down: equipo → control ISO 27001 → resultado |
-| ENS ↔ ISO 27001 crosswalk | Control ENS → control ISO 27001 → resultado, from live data (validates `docs/iso27001_mapping.md`) |
-
----
-
-## Deploying SCA policies to agents
-
-By default, the SCA policies run on the Wazuh manager itself. To audit remote agents, deploy the policies via **Wazuh groups** — the manager pushes the files automatically to all agents in the group.
-
-### Automated script (recommended)
-
-```bash
-sudo bash deploy_sca_agents.sh
-```
-
-The script:
-1. Reads Wazuh API credentials from `wazuh-install-files.tar` automatically
-2. Queries the Wazuh API for all active agents and detects their OS
-3. Creates the `ens-linux` and `ens-windows` groups if they do not exist
-4. Copies the policy files to the group shared directories
-5. Writes the `agent.conf` for each group
-6. Assigns each agent to the correct group based on its OS
-
-Available flags:
-
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Show what would be done without making any changes |
-| `--force-scan` | Trigger an immediate SCA scan on all assigned agents |
-| `--no-assign` | Create groups and copy files only; skip agent assignment |
-
-```bash
-# Preview without changes
-sudo bash deploy_sca_agents.sh --dry-run
-
-# Deploy and force immediate scans
-sudo bash deploy_sca_agents.sh --force-scan
-```
-
-### From the web UI
-
-The web UI does not support uploading arbitrary files to a group — SCA policy files must be copied via the CLI. What you **can** do from the UI:
-
-1. **Management → Groups → Add new group** — name it `ens-linux`
-2. **Groups → ens-linux → Edit group configuration** — paste the `agent.conf` block (after copying the policy file via CLI)
-3. **Agents → select agent → Groups → Assign group → ens-linux**
-
-### From the command line (manual)
-
-```bash
-# Create the group
-/var/ossec/bin/agent_groups -a -g ens-linux
-
-# Copy the policy into the group's shared directory
-sudo cp /var/ossec/ruleset/sca/ens_linux.yml /var/ossec/etc/shared/ens-linux/
-sudo chown wazuh:wazuh /var/ossec/etc/shared/ens-linux/ens_linux.yml
-
-# Create the group configuration
-sudo tee /var/ossec/etc/shared/ens-linux/agent.conf <<'EOF'
-<agent_config>
+G=ens-linux; P=ens_linux.yml; OS=Linux      # or ens-windows / ens_windows.yml / Windows
+AGENT_SHARED=etc/shared                       # Windows agents: shared (no etc/)
+SHARED=/etc/wazuh-manager/shared              # /var/wazuh-manager/etc/shared on builds before late Oct 2026
+sudo /var/wazuh-manager/bin/agent_groups -a -g "$G" -q
+sudo install -m 0660 -o root -g wazuh-manager "sca/$P" "$SHARED/$G/$P"
+sudo tee "$SHARED/$G/agent.conf" >/dev/null <<EOF
+<agent_config os="$OS">
   <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>12h</interval>
     <policies>
-      <policy>etc/shared/ens_linux.yml</policy>
+      <policy>$AGENT_SHARED/$P</policy>
     </policies>
   </sca>
 </agent_config>
 EOF
-
-# Assign an agent to the group (replace 001 with the agent ID)
-/var/ossec/bin/agent_groups -a -i 001 -g ens-linux
-
-# List agents in the group
-/var/ossec/bin/agent_groups -l -g ens-linux
-
-# Force an immediate SCA scan
-/var/ossec/bin/agent_control -r -u 001
 ```
 
-### For Windows agents
+The policy path is relative to the agent's install directory, where group files land:
+`etc/shared/` on Linux and macOS, `shared\` on Windows. A Windows agent given `etc/shared/...`
+logs "File not found" and skips the policy without any other error.
+</details>
+
+### 2. Allow command checks on the agents
+
+28 of the 60 Linux checks and 4 of the 17 Windows checks run a command (`sshd -T`, `auditctl`,
+`systemctl`, `secedit`, `Get-MpComputerStatus`...). A Wazuh agent skips command rules in a
+policy pushed from the manager unless `sca.remote_commands=1` is set in its
+`local_internal_options.conf`. Those checks then show `Not applicable` with the reason
+`Remote commands are disabled for this policy`.
 
 ```bash
-/var/ossec/bin/agent_groups -a -g ens-windows
-sudo cp /var/ossec/ruleset/sca/ens_windows.yml /var/ossec/etc/shared/ens-windows/
-sudo chown wazuh:wazuh /var/ossec/etc/shared/ens-windows/ens_windows.yml
-
-sudo tee /var/ossec/etc/shared/ens-windows/agent.conf <<'EOF'
-<agent_config>
-  <sca>
-    <policies>
-      <policy>etc/shared/ens_windows.yml</policy>
-    </policies>
-  </sca>
-</agent_config>
-EOF
-
-/var/ossec/bin/agent_groups -a -i <agent_id> -g ens-windows
-/var/ossec/bin/agent_control -r -u <agent_id>
+sudo tools/agent_enable_sca_commands.sh            # Linux agent
+```
+```powershell
+.\tools\agent_enable_sca_commands.ps1              # Windows agent, elevated
 ```
 
-### Verify the policy reached the agent
+This lets policies pushed by the manager run commands as root/SYSTEM on the agent. Only enable
+it where the manager is trusted to do that. The other checks (files, `/proc/sys`, processes,
+registry) work without it.
+
+### 3. Detection rules
+
+On 5.x there is no `etc/rules` directory: rules are Sigma YAML documents in the Indexer content
+manager, linked to a custom integration and evaluated by a Security Analytics detector. The
+rules in `rules/` and how to deploy them are described in
+[docs/detection_rules_5x.md](docs/detection_rules_5x.md):
 
 ```bash
-# On the manager — check the agent received the file
-ls /var/ossec/etc/shared/ens-linux/
-
-# Check the agent's SCA log (on the agent or via manager logs)
-grep -i "ens_linux" /var/ossec/logs/ossec.log | tail -10
-
-# Confirm via diagnose mode (shows all policies per agent)
-sudo python3 tools/sync_sca_to_opensearch.py --diagnose
+python3 tools/deploy_rules.py --help
+python3 tools/deploy_rules.py --dry-run --indexer https://<indexer>:9200 --user admin
 ```
 
-The policy synchronisation typically takes 1–2 minutes. After the first scan completes, run the sync tool to index the results.
+### 4. Dashboards
+
+See [dashboards/README.md](dashboards/README.md). Import `ens_sca_compliance_5x.ndjson` and
+`ens_detections_5x.ndjson` from **Dashboards Management → Saved objects → Import**.
+
+---
+
+## Verifying
+
+```bash
+# On the manager: the group has the files
+sudo /var/wazuh-manager/bin/agent_groups -c -g ens-linux
+# Which agents are in the group
+sudo /var/wazuh-manager/bin/agent_groups -l -g ens-linux
+```
+
+On an agent, `/var/ossec/etc/shared/ens_linux.yml` should exist after the next sync (about a
+minute), and the agent log shows the scan. Results then appear in `wazuh-states-sca`:
+
+```
+GET wazuh-states-sca/_search
+{ "size": 0, "query": { "terms": { "policy.id": ["ens_linux", "ens_windows"] } },
+  "aggs": { "agent": { "terms": { "field": "wazuh.agent.name" },
+            "aggs": { "result": { "terms": { "field": "check.result" } } } } } }
+```
 
 ---
 
 ## Troubleshooting
 
-### 0 documents indexed
-
-Run the diagnose mode to identify the cause:
-
-```bash
-sudo python3 tools/sync_sca_to_opensearch.py --diagnose
-```
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| No active agents listed | No agents connected | Install and register agents |
-| No SCA policies found for an agent | First scan not yet run | Force scan: `agent_control -r -u <id>` |
-| ENS policies not in agent list | Policy not deployed to agent | Follow the group deployment steps above |
-| Only manager (000) has ENS data | No remote agents with ENS | Add `--include-manager` flag |
-| 401 Unauthorized on Wazuh API | Wrong credentials | Check `WAZUH_USER` / `WAZUH_PASS` |
-
-### Dashboard fields missing
-
-If panels show "Could not locate index-pattern field":
-
-1. Wait for the first sync to complete and create the `ens-sca-checks` index
-2. Refresh the index pattern: **Stack Management → Index Patterns → ens-sca-checks → ⟳**
-
-### SCA policy skipped by Wazuh
-
-Check the manager log for parse errors:
-
-```bash
-grep -i "ens_linux\|ens_windows\|Invalid check" /var/ossec/logs/ossec.log | tail -20
-```
-
-Run the full diagnostic script:
-
-```bash
-sudo bash tests/diagnose_sca.sh admin <opensearch-password>
-```
+| Symptom | Cause / fix |
+|---|---|
+| Many checks `Not applicable`, reason `Remote commands are disabled for this policy` | `sca.remote_commands=1` is not set on that agent (step 2) |
+| Agent log: `Invalid compliance key 'ens'` | The agent still has a 4.x policy. Re-run `install.sh` so the group copy is replaced |
+| No ENS results for an agent | The agent isn't in `ens-linux`/`ens-windows` (`agent_groups -s -i <id>`), or the group isn't registered |
+| sshd checks `Not applicable` | `sshd` isn't installed, or `sshd -T` failed (it needs root and readable host keys) |
+| `ip_forward` fails on Docker hosts, hypervisors, VPN gateways | Expected: they route by design. Record the exception |
+| Per-control dashboard panels empty | The checks don't carry `ens:` references: the policy on the agent is not the 5.x one |
 
 ---
 
@@ -446,27 +280,27 @@ Every row below is also tagged with its ISO/IEC 27001:2022 Annex A equivalent �
 ```
 ENS-Wazuh-integration/
 ├── sca/
-│   ├── ens_linux.yml                   # SCA policy for Linux agents
-│   └── ens_windows.yml                 # SCA policy for Windows agents
-├── rules/
-│   └── ens_detection_rules.xml         # Custom detection rules with ENS tags
+│   ├── ens_linux.yml                 # SCA policy for Linux agents (60 checks)
+│   └── ens_windows.yml               # SCA policy for Windows agents (17 checks)
+├── rules/                            # Sigma detection rules for the 5.x content manager
 ├── dashboards/
-│   ├── ens_dashboard.ndjson            # Summary dashboard (wazuh-alerts-*)
-│   └── ens_sca_checks_dashboard.ndjson # Check-level dashboard (ens-sca-checks)
+│   ├── build_dashboards.py           # generator for the two ndjson bundles
+│   ├── ens_sca_compliance_5x.ndjson  # SCA posture (wazuh-states-sca*)
+│   ├── ens_detections_5x.ndjson      # ENS findings (wazuh-findings-v5-*)
+│   └── README.md
 ├── tools/
-│   └── sync_sca_to_opensearch.py       # Wazuh API → OpenSearch bridge
+│   ├── deploy_rules.py               # create/update/promote rules + detectors
+│   ├── agent_enable_sca_commands.sh  # sets sca.remote_commands=1 on a Linux agent
+│   └── agent_enable_sca_commands.ps1 # same for Windows agents
 ├── docs/
-│   ├── controls_mapping.md             # Full ENS ↔ Wazuh mapping reference
-│   ├── iso27001_mapping.md             # ENS ↔ ISO/IEC 27001:2022 controls crosswalk
-│   └── installation_guide.md          # Detailed installation guide
+│   ├── MIGRATION_5x.md               # what changed from the 4.x version, and why
+│   ├── detection_rules_5x.md         # rule-by-rule port notes and deployment
+│   ├── controls_mapping.md           # ENS ↔ Wazuh mapping
+│   └── iso27001_mapping.md           # ENS ↔ ISO/IEC 27001:2022 crosswalk
 ├── tests/
-│   ├── validate_sca.py                 # SCA policy syntax validation script
-│   └── diagnose_sca.sh                 # Diagnostic script for missing compliance fields
-├── install.sh                          # Phase 1: core installer
-├── install_sync.sh                     # Phase 2: API sync installer
-├── deploy_sca_agents.sh                # Deploy SCA policies to agents via groups
-├── uninstall.sh                        # Core uninstaller
-└── uninstall_sync.sh                   # Sync tool uninstaller
+│   └── validate_sca.py               # validates policies against 5.x agent rules
+├── install.sh                        # manager-side installer (groups + policies)
+└── uninstall.sh
 ```
 
 ---
@@ -488,7 +322,6 @@ Areas where help is especially needed:
 - [Real Decreto 311/2022 — BOE](https://www.boe.es/boe/dias/2022/05/03/pdfs/BOE-A-2022-7191.pdf)
 - [CCN-CERT ENS Portal](https://ens.ccn.cni.es)
 - [Wazuh SCA Documentation](https://documentation.wazuh.com/current/user-manual/capabilities/sec-config-assessment/)
-- [Wazuh Rules Documentation](https://documentation.wazuh.com/current/user-manual/ruleset/custom-rules/)
 - [Wazuh Groups Documentation](https://documentation.wazuh.com/current/user-manual/reference/centralized-configuration.html)
 
 ---

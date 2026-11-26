@@ -2,32 +2,34 @@
 
 Full reference mapping between ENS (Real Decreto 311/2022) controls and Wazuh SCA checks and detection rules.
 
-Every check and rule below is also tagged with its equivalent ISO/IEC 27001:2022 Annex A control — see [`iso27001_mapping.md`](iso27001_mapping.md) for the full ENS ↔ ISO 27001 correspondence table and the `compliance.iso_27001` / `ISO27001_<control>` filters.
+Every check and rule below is also tagged with its equivalent ISO/IEC 27001:2022 Annex A control — see [`iso27001_mapping.md`](iso27001_mapping.md) for the full ENS ↔ ISO 27001 correspondence table and how to filter by it on Wazuh 5.x.
 
-| ENS Control | Description | Level | SCA Check IDs (Linux) | SCA Check IDs (Windows) | Rule IDs | Type |
+Detection rules marked ¹ ship with `enabled: false` (too noisy to enable by default). Rule-by-rule port notes, including the 4.x rules that were dropped, are in [`detection_rules_5x.md`](detection_rules_5x.md).
+
+| ENS Control | Description | Level | SCA Check IDs (Linux) | SCA Check IDs (Windows) | Detection rules (`rules/`) | Type |
 |-------------|-------------|-------|-----------------------|-------------------------|----------|------|
-| **op.acc.1** | Identificación | Básico | 30001–30006 | — | 100200, 100201 | SCA + Rules |
-| **op.acc.2** | Requisitos de acceso | Básico | 30010–30014 | 31010, 31011 | 100210 | SCA + Rules |
-| **op.acc.3** | Segregación de funciones | Básico | 30020–30022 | 31034 | 100220, 100221 | SCA + Rules |
-| **op.acc.4** | Gestión de derechos de acceso | Básico | — | — | 100230–100233 | Rules |
-| **op.acc.6** | Autenticación (usuarios org.) | Básico/Medio | 30030–30035 | 31030, 31032, 31033, 31035, 31036 | 100200–100203 | SCA + Rules |
-| **op.acc.7** | Acceso remoto | Medio | 30040–30042 | — | — | SCA |
+| **op.acc.1** | Identificación | Básico | 30001–30006 | — | `ens-op-acc-1-ssh-session-opened`, `ens-op-acc-6-authentication-failure`¹ | SCA + Rules |
+| **op.acc.2** | Requisitos de acceso | Básico | 30010–30014 | 31010, 31011 | `ens-op-acc-2-password-changed-or-reset` | SCA + Rules |
+| **op.acc.3** | Segregación de funciones | Básico | 30020–30022 | 31034 | `ens-op-acc-3-sudo-authentication-failure`, `ens-op-acc-3-sudo-command-executed`, `ens-op-acc-4-user-added-to-privileged-group` | SCA + Rules |
+| **op.acc.4** | Gestión de derechos de acceso | Básico | — | — | `ens-op-acc-4-user-account-created`, `ens-op-acc-4-user-account-deleted`, `ens-op-acc-4-user-account-modified`, `ens-op-acc-4-user-added-to-privileged-group`, `ens-op-exp-3-critical-system-file-changed` | Rules |
+| **op.acc.6** | Autenticación (usuarios org.) | Básico/Medio | 30030–30035 | 31030, 31032, 31033, 31035, 31036 | `ens-op-acc-3-sudo-authentication-failure`, `ens-op-acc-6-account-locked-out`, `ens-op-acc-6-authentication-failure`¹ | SCA + Rules |
+| **op.acc.7** | Acceso remoto | Medio | 30040–30042 | — | `ens-op-acc-1-ssh-session-opened` | SCA + Rules |
 | **op.exp.2** | Configuración de seguridad | Básico/Medio | 30100–30108 | 31102 | — | SCA |
-| **op.exp.3** | Gestión de la configuración | Básico | — | — | 100300–100302 | Rules |
-| **op.exp.5** | Gestión de cambios | Básico | — | — | 100300, 100301 | Rules |
-| **op.exp.6** | Protección frente a código dañino | Básico | 30110 | 31100, 31101 | 100310 | SCA + Rules |
-| **op.exp.7** | Gestión de incidentes | Básico | — | — | 100320, 100321 | Rules |
-| **op.exp.8** | Registro de actividad de usuarios | Básico/Medio | 30120–30126 | 31120, 31121, 31200 | 100330, 100331 | SCA + Rules |
-| **op.exp.9** | Registro de gestión de incidentes | Básico | — | — | 100320 | Rules |
-| **op.exp.10** | Protección de registros | Medio | 30123, 30130, 30131 | — | 100331, 100340 | SCA + Rules |
-| **op.mon.1** | Detección de intrusión | Básico | 30200, 30201 | 31031 | 100400, 100401 | SCA + Rules |
-| **mp.com.2** | Protección de la confidencialidad | Medio | 30300, 30301 | 31302 | 100500 | SCA + Rules |
-| **mp.com.3** | Autenticidad e integridad | Básico | 30310 | — | 100202, 100500 | SCA + Rules |
+| **op.exp.3** | Gestión de la configuración | Básico | — | — | `ens-op-exp-3-critical-system-file-changed` | Rules |
+| **op.exp.5** | Gestión de cambios | Básico | — | — | `ens-op-exp-3-critical-system-file-changed`, `ens-op-exp-5-windows-service-installed` | Rules |
+| **op.exp.6** | Protección frente a código dañino | Básico | 30110 | 31100 | `ens-op-exp-6-rootkit-hidden-process-or-port` | SCA + Rules |
+| **op.exp.7** | Gestión de incidentes | Básico | — | — | `ens-op-acc-6-account-locked-out` | Rules |
+| **op.exp.8** | Registro de actividad de usuarios | Básico/Medio | 30120–30126 | 31120, 31121, 31200 | `ens-op-acc-3-sudo-command-executed`, `ens-op-exp-8-audit-daemon-stopped` | SCA + Rules |
+| **op.exp.9** | Registro de gestión de incidentes | Básico | — | — | — | — |
+| **op.exp.10** | Protección de registros | Medio | 30123, 30130, 30131 | — | `ens-op-exp-10-windows-event-log-cleared`, `ens-op-exp-8-audit-daemon-stopped` | SCA + Rules |
+| **op.mon.1** | Detección de intrusión | Básico | 30200, 30201 | 31031 | `ens-op-exp-6-rootkit-hidden-process-or-port` | SCA + Rules |
+| **mp.com.2** | Protección de la confidencialidad | Medio | 30300, 30301 | 31302 | — | SCA |
+| **mp.com.3** | Autenticidad e integridad | Básico | 30310 | — | — | SCA |
 | **mp.com.4** | Segregación de redes | Básico | 30320–30325 | — | — | SCA |
 | **mp.eq.2** | Bloqueo de puesto de trabajo | Básico | 30400 | 31400 | — | SCA |
 | **mp.info.3** | Cifrado de la información | Medio | 30500 | — | — | SCA |
 | **mp.info.9** | Copias de seguridad | Básico | 30510 | — | — | SCA |
-| **mp.s.2** | Protección de servicios web | Básico | 30600–30602 | — | 100600, 100601 | SCA + Rules |
+| **mp.s.2** | Protección de servicios web | Básico | 30600–30602 | — | `ens-op-exp-5-windows-service-installed` | SCA + Rules |
 | **mp.s.3** | Protección frente a DoS | Básico | 30320, 30324 | — | — | SCA |
 | **mp.sw.2** | Aceptación y puesta en servicio | Básico | 30700 | 31700 | — | SCA |
 
@@ -55,25 +57,32 @@ The following ENS controls cannot be automatically audited by Wazuh and require 
 | mp.info.4 | Firma electrónica | PKI review |
 | mp.info.5 | Sellos de tiempo | Timestamp service review |
 
-## Level filter reference
+## Level filter reference (Wazuh 5.x)
 
-To filter checks by ENS compliance level in OpenSearch, query the `ens-sca-checks`
-index (populated by `tools/sync_sca_to_opensearch.py` — see README Phase 2):
+SCA results live in the `wazuh-states-sca` index (current state, one document per agent and
+check). ENS metadata is in `check.references`; see the README section *How ENS data is stored
+on Wazuh 5.x* for why it isn't in `check.compliance`.
 
-- **Básico**: `ens.check.compliance.ens_nivel: "Básico"`
-- **Medio**: `ens.check.compliance.ens_nivel: "Medio" OR "Básico"`
-- **Alto**: all checks (Básico + Medio + Alto)
+- **Básico**: `check.references: "ens-level:basico"`
+- **Medio**: `check.references: ("ens-level:basico" or "ens-level:medio")`
+- **Alto**: all checks (`policy.id: (ens_linux or ens_windows)`)
+- One control: `check.references: "ens:op.acc.6"`; a family: `check.references: ens\:op.acc.*`
 
-> **Do not filter on `data.sca.check.compliance.*` in `wazuh-alerts-*`.** Wazuh
-> only writes an individual check event there on the first scan and on a
-> pass/fail state change — never a full snapshot — so those fields return
-> sparse, incomplete results. Only `data.sca.type: summary` (score/passed/failed
-> per policy) is reliably available in `wazuh-alerts-*`; per-control detail
-> requires the `ens-sca-checks` index. See [`iso27001_mapping.md`](iso27001_mapping.md#filtering-by-iso-27001-in-opensearch).
+For detection rules, filter findings (`wazuh-findings-v5-*`) on `wazuh.rule.tags`:
+- `wazuh.rule.tags: ens.op.acc.*`, `ens.op.exp.*`, `ens.mp.*`
+- `wazuh.rule.tags: iso27001-2022.5.*` / `iso27001-2022.8.*`
 
-For detection rules, filter by group (these alert normally, so `wazuh-alerts-*`
-is fine here):
-- `rule.groups: ENS_op.acc.*`
-- `rule.groups: ENS_op.exp.*`
-- `rule.groups: ENS_mp.*`
-- `rule.groups: ISO27001_5.*` / `ISO27001_8.*` (equivalent ISO 27001:2022 groups)
+## NIS2 mapping used in `check.compliance.nis2`
+
+`nis2` is one of the compliance keys the 5.x SCA schema accepts, so each ENS check also carries
+the NIS2 Directive Art. 21.2 measure its ENS family supports. The mapping is at family level and
+approximate: it helps filtering alongside Wazuh's own policies, it is not a legal crosswalk.
+
+| ENS family / control | NIS2 Art. 21.2 | Measure |
+|---|---|---|
+| op.acc.*, mp.eq.* | 21.2.i | Human resources security, access control, asset management |
+| op.exp.2, op.exp.6, mp.com.4, mp.s.*, mp.sw.* | 21.2.e | Security in acquisition, development and maintenance, incl. vulnerability handling |
+| op.exp.6 | 21.2.g | Basic cyber hygiene |
+| op.exp.8, op.exp.10, op.mon.* | 21.2.b | Incident handling |
+| mp.com.2, mp.com.3, mp.info.3 | 21.2.h | Cryptography and encryption |
+| mp.info.9 | 21.2.c | Business continuity, backup management |
