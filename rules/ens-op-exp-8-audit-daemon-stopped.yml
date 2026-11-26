@@ -1,0 +1,61 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "5eeb5df4-56d1-4ea0-a678-e7c88b2704d9"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "f2c24021-aed7-4dd7-a690-4f89beab05fa"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "high"
+
+metadata:
+  title: "ENS op.exp.8: Linux audit daemon stopped"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    auditd logged DAEMON_END or DAEMON_ABORT: kernel audit logging stopped. Evidence for ENS
+    op.exp.8 (user activity logging) and op.exp.10 (protection of logs). Requires agents to collect
+    /var/log/audit/audit.log (auditd integration). Fixes the 4.x set, where rule 100330 also lowered
+    'auditd daemon end' from level 10 to 3.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100331"
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100330"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "auditd"
+    event.code:
+      - "DAEMON_END"
+      - "DAEMON_ABORT"
+
+mitre:
+  tactic:
+    - "TA0005"
+  technique:
+    - "T1562"
+  subtechnique:
+    - "T1562.012"
+
+compliance:
+  nis2:
+    - "21.2.b"
+
+tags:
+  - "ens.op.exp.8"
+  - "ens.op.exp.10"
+  - "iso27001-2022.8.15"
+  - "attack.defense-evasion"
+  - "attack.t1562.012"
+
+falsepositives:
+  - "Planned reboots and auditd package upgrades"

@@ -1,0 +1,58 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "2f95be30-8aaa-4e52-8f0c-449a2518e3f2"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "566d8b42-50d6-42b4-978c-186773f1a9ea"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "medium"
+
+metadata:
+  title: "ENS op.acc.6: Account locked out"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A Windows account was locked out after repeated failed logons (4740). A single-event proxy for
+    password guessing (ENS op.acc.6, op.exp.7) while brute-force thresholds need Alerting bucket
+    monitors in 5.0.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100320"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "windows"
+    event.action: "account-locked"
+
+mitre:
+  tactic:
+    - "TA0006"
+  technique:
+    - "T1110"
+  subtechnique: []
+
+compliance:
+  nis2:
+    - "21.2.b"
+    - "21.2.j"
+
+tags:
+  - "ens.op.acc.6"
+  - "ens.op.exp.7"
+  - "iso27001-2022.8.5"
+  - "iso27001-2022.5.26"
+  - "attack.credential-access"
+  - "attack.t1110"
+
+falsepositives:
+  - "Users with stale cached passwords on another device"

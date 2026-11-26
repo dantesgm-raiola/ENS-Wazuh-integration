@@ -1,0 +1,59 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "1aad0781-c48f-448a-98d0-06a378c739dd"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "7d067f31-17ff-4bb1-bcdd-b606c8e05716"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "low"
+
+metadata:
+  title: "ENS op.acc.3: Command run with sudo"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A command was executed through sudo (the 'COMMAND=' line, event.action sudo). Records privileged
+    use for ENS op.acc.3 (segregation of duties) and op.exp.8 (user activity logging). Fixes the 4.x
+    rule, which hooked rule 5401 (sudo failure) and labelled it success.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100220"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "linux"
+    process.name: "sudo"
+    event.action: "sudo"
+
+mitre:
+  tactic:
+    - "TA0004"
+  technique:
+    - "T1548"
+  subtechnique:
+    - "T1548.003"
+
+compliance:
+  nis2:
+    - "21.2.i"
+
+tags:
+  - "ens.op.acc.3"
+  - "ens.op.exp.8"
+  - "iso27001-2022.5.3"
+  - "iso27001-2022.8.15"
+  - "attack.privilege-escalation"
+  - "attack.t1548.003"
+
+falsepositives:
+  - "Routine administration"

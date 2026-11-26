@@ -2,75 +2,82 @@ policy:
   id: "ens_windows"
   file: "ens_windows.yml"
   name: "ENS (Esquema Nacional de Seguridad) - Windows"
-  description: "Security configuration checks based on the Spanish National Security Framework (Real Decreto 311/2022) for Windows systems. Work in progress — contributions welcome."
+  description: "Security configuration checks based on the Spanish National Security Framework (Real Decreto 311/2022) for Windows systems on Wazuh 5.x. Each check carries its ENS control and minimum level in check.references (ens:<control>, ens-level:<level>) and in the check name."
   references:
     - https://www.boe.es/boe/dias/2022/05/03/pdfs/BOE-A-2022-7191.pdf
     - https://github.com/fredycibersec/ENS-Wazuh-integration
 
 requirements:
-  title: "Windows"
+  name: "Windows"
   description: "Requirements to run this SCA policy"
   condition: all
   rules:
     - 'r:HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion -> ProductName -> r:Windows'
-
-variables:
-  $system32: C:\Windows\System32
 
 checks:
 
   # op.acc.2 — Requisitos de acceso
 
   - id: 31010
-    title: "Ensure minimum password length is 12 or more [op.acc.2] [Básico]"
+    name: "Ensure minimum password length is 12 or more [op.acc.2] [Básico]"
     description: "Windows password minimum length must be at least 12 characters."
     rationale: "ENS op.acc.2 requires strong password policy. Short passwords are vulnerable to brute force."
-    remediation: "Set Minimum password length to 12 in Local Security Policy → Account Policies → Password Policy."
+    remediation: "Set 'Minimum password length' to 12 or more in Local Security Policy > Account Policies > Password Policy, or in the Default Domain Policy GPO for domain accounts."
+    references:
+      - "ens:op.acc.2"
+      - "ens-level:basico"
+      - "iso27001-2022:5.15"
     compliance:
-      - ens: "op.acc.2"
-      - ens_nivel: "Básico"
-      - iso_27001: "5.15"
+      nis2: ["21.2.i"]
     condition: all
     rules:
-      - 'r:HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters -> MinimumPasswordLength -> r:^(1[2-9]|[2-9][0-9]|[0-9][0-9][0-9][0-9]*)'
+      - 'c:powershell secedit /export /cfg $env:TEMP\ens_secpol.cfg; Get-Content $env:TEMP\ens_secpol.cfg | Select-String "MinimumPasswordLength"; Remove-Item $env:TEMP\ens_secpol.cfg -> n:MinimumPasswordLength = (\d+) compare >= 12'
 
   - id: 31011
-    title: "Ensure maximum password age is 90 days or less [op.acc.2] [Básico]"
+    name: "Ensure maximum password age is 90 days or less, but not 0 [op.acc.2] [Básico]"
     description: "Password expiration must be set to 90 days or fewer."
     rationale: "Regular password rotation limits exposure of compromised credentials."
     remediation: "Set Maximum password age to 90 in Local Security Policy."
+    references:
+      - "ens:op.acc.2"
+      - "ens-level:basico"
+      - "iso27001-2022:5.15"
     compliance:
-      - ens: "op.acc.2"
-      - ens_nivel: "Básico"
-      - iso_27001: "5.15"
+      nis2: ["21.2.i"]
     condition: all
     rules:
-      - 'r:HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters -> MaximumPasswordAge -> r:^([0-9]|[1-8][0-9]|90)$'
+      - 'c:powershell secedit /export /cfg $env:TEMP\ens_secpol.cfg; Get-Content $env:TEMP\ens_secpol.cfg | Select-String "MaximumPasswordAge"; Remove-Item $env:TEMP\ens_secpol.cfg -> n:MaximumPasswordAge = (\d+) compare <= 90'
+      - 'c:powershell secedit /export /cfg $env:TEMP\ens_secpol.cfg; Get-Content $env:TEMP\ens_secpol.cfg | Select-String "MaximumPasswordAge"; Remove-Item $env:TEMP\ens_secpol.cfg -> n:MaximumPasswordAge = (\d+) compare > 0'
 
   # op.acc.6 — Mecanismo de autenticación
 
   - id: 31030
-    title: "Ensure account lockout threshold is 5 or fewer attempts [op.acc.6] [Básico]"
+    name: "Ensure account lockout threshold is 5 or fewer attempts, but not 0 [op.acc.6] [Básico]"
     description: "Accounts must be locked after 5 or fewer failed login attempts."
     rationale: "Account lockout limits brute force attacks on user credentials."
     remediation: "Set Account lockout threshold to 5 in Local Security Policy → Account Lockout Policy."
+    references:
+      - "ens:op.acc.6"
+      - "ens-level:basico"
+      - "iso27001-2022:8.5"
     compliance:
-      - ens: "op.acc.6"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.5"
+      nis2: ["21.2.i"]
     condition: all
     rules:
-      - 'r:HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters -> LockoutBadCount -> r:^[0-5]$'
+      - 'c:powershell secedit /export /cfg $env:TEMP\ens_secpol.cfg; Get-Content $env:TEMP\ens_secpol.cfg | Select-String "LockoutBadCount"; Remove-Item $env:TEMP\ens_secpol.cfg -> n:LockoutBadCount = (\d+) compare <= 5'
+      - 'c:powershell secedit /export /cfg $env:TEMP\ens_secpol.cfg; Get-Content $env:TEMP\ens_secpol.cfg | Select-String "LockoutBadCount"; Remove-Item $env:TEMP\ens_secpol.cfg -> n:LockoutBadCount = (\d+) compare > 0'
 
   - id: 31031
-    title: "Ensure Windows Firewall is enabled for all profiles [op.mon.1] [Básico]"
+    name: "Ensure Windows Firewall is enabled for all profiles [op.mon.1] [Básico]"
     description: "Windows Defender Firewall must be enabled for Domain, Private, and Public profiles."
     rationale: "A host firewall is a fundamental ENS op.mon.1 control for reducing attack surface."
     remediation: "Enable Windows Defender Firewall for all network profiles via Group Policy or Settings."
+    references:
+      - "ens:op.mon.1"
+      - "ens-level:basico"
+      - "iso27001-2022:8.16"
     compliance:
-      - ens: "op.mon.1"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.16"
+      nis2: ["21.2.b"]
     condition: all
     rules:
       - 'r:HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile -> EnableFirewall -> 1'
@@ -80,115 +87,124 @@ checks:
   # op.exp.2 — Configuración de seguridad
 
   - id: 31100
-    title: "Ensure Windows Defender Antivirus is enabled [op.exp.6] [Básico]"
-    description: "Windows Defender Antivirus real-time protection must be enabled."
+    name: "Ensure antimalware real-time protection is active [op.exp.6] [Básico]"
+    description: "An antimalware product must be actively protecting the host: Microsoft Defender real-time protection, ESET (ekrn.exe), Defender for Endpoint (MsSense.exe), CrowdStrike Falcon or Sophos."
     rationale: "ENS op.exp.6 requires protection against malicious code."
-    remediation: "Enable Windows Defender via Settings → Windows Security → Virus & threat protection."
+    remediation: "Enable real-time protection in the installed antimalware product. If you use another product, add its main service process to this check."
+    references:
+      - "ens:op.exp.6"
+      - "ens-level:basico"
+      - "iso27001-2022:8.7"
     compliance:
-      - ens: "op.exp.6"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.7"
-    condition: all
+      nis2: ["21.2.e", "21.2.g"]
+    condition: any
     rules:
-      - 'r:HKLM\SOFTWARE\Microsoft\Windows Defender -> DisableAntiSpyware -> 0'
-
-  - id: 31101
-    title: "Ensure Windows Defender real-time protection is enabled [op.exp.6] [Básico]"
-    description: "Real-time monitoring must be active in Windows Defender."
-    rationale: "Real-time protection is required for active malware detection."
-    remediation: "Enable real-time protection in Windows Security settings."
-    compliance:
-      - ens: "op.exp.6"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.7"
-    condition: all
-    rules:
-      - 'r:HKLM\SOFTWARE\Microsoft\Windows Defender\Real-Time Protection -> DisableRealtimeMonitoring -> 0'
+      - 'c:powershell -NoProfile -Command "(Get-MpComputerStatus).RealTimeProtectionEnabled" -> r:^True$'
+      - 'p:ekrn.exe'
+      - 'p:MsSense.exe'
+      - 'p:CSFalconService.exe'
+      - 'p:SophosHealth.exe'
 
   # op.exp.8 — Registro de actividad
 
   - id: 31120
-    title: "Ensure Windows Event Log (Security) is enabled [op.exp.8] [Básico]"
-    description: "Windows Security Event Log must be enabled and active."
+    name: "Ensure the Windows Event Log service is set to start automatically [op.exp.8] [Básico]"
+    description: "The Windows Event Log service (EventLog) must start automatically so the Security log is always recorded."
     rationale: "ENS op.exp.8 requires logging of user activity. Windows Security log captures authentication events."
     remediation: "Enable the Security event log via Event Viewer or Group Policy."
+    references:
+      - "ens:op.exp.8"
+      - "ens-level:basico"
+      - "iso27001-2022:8.15"
     compliance:
-      - ens: "op.exp.8"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.15"
+      nis2: ["21.2.b"]
     condition: all
     rules:
-      - 'r:HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Security -> Start -> r:^[0-2]$'
+      - 'r:HKLM\SYSTEM\CurrentControlSet\Services\EventLog -> Start -> 2'
 
   # mp.eq.2 — Bloqueo de puesto de trabajo
 
   - id: 31400
-    title: "Ensure screen lock timeout is 15 minutes or less [mp.eq.2] [Básico]"
-    description: "The screen saver or lock screen must activate after 15 minutes of inactivity."
+    name: "Ensure the machine inactivity limit is 900 seconds or less [mp.eq.2] [Básico]"
+    description: "The interactive logon machine inactivity limit must lock the session after at most 15 minutes. This is a machine-wide setting; the old per-user screensaver check read HKCU, which is the SYSTEM account's hive when the agent scans."
     rationale: "ENS mp.eq.2 requires workstation locking after inactivity."
-    remediation: "Set screen saver timeout via Group Policy: User Configuration → Administrative Templates → Control Panel → Personalization."
+    remediation: "Set Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > 'Interactive logon: Machine inactivity limit' to 900 or fewer seconds (not 0)."
+    references:
+      - "ens:mp.eq.2"
+      - "ens-level:basico"
+      - "iso27001-2022:8.1"
     compliance:
-      - ens: "mp.eq.2"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.1"
+      nis2: ["21.2.i"]
     condition: all
     rules:
-      - 'r:HKCU\Control Panel\Desktop -> ScreenSaveTimeOut -> r:^([0-9]|[1-9][0-9]|[1-8][0-9][0-9]|900)$'
+      - 'r:HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System -> InactivityTimeoutSecs'
+      - 'not r:HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System -> InactivityTimeoutSecs -> 0'
+      - 'r:HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System -> InactivityTimeoutSecs -> n:^(\d+) compare <= 900'
 
   # mp.sw.2 — Aceptación y puesta en servicio
 
   - id: 31700
-    title: "Ensure Windows automatic updates are enabled [mp.sw.2] [Básico]"
-    description: "Windows Update must be configured to automatically download and install updates."
+    name: "Ensure Windows automatic updates are not disabled [mp.sw.2] [Básico]"
+    description: "Automatic updates must not be disabled by policy (NoAutoUpdate=1) and the Windows Update service must not be disabled."
     rationale: "ENS mp.sw.2 requires software to be kept up to date and verified."
-    remediation: "Enable Windows Update via Settings → Windows Update → Advanced options."
+    remediation: "Remove the NoAutoUpdate=1 policy (Computer Configuration > Administrative Templates > Windows Components > Windows Update > Configure Automatic Updates: Enabled) and set the Windows Update service to Manual or Automatic."
+    references:
+      - "ens:mp.sw.2"
+      - "ens-level:basico"
+      - "iso27001-2022:8.29"
     compliance:
-      - ens: "mp.sw.2"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.29"
+      nis2: ["21.2.e"]
     condition: all
     rules:
-      - 'r:HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update -> AUOptions -> r:^[3-9]$|^[1-9][0-9]+'
+      - 'not r:HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU -> NoAutoUpdate -> 1'
+      - 'not r:HKLM\SYSTEM\CurrentControlSet\Services\wuauserv -> Start -> 4'
 
   # op.acc.6 — Mecanismo de autenticación (cont.)
 
   - id: 31032
-    title: "Ensure Network Level Authentication is required for RDP [op.acc.6] [Básico]"
+    name: "Ensure Network Level Authentication is required for RDP [op.acc.6] [Básico]"
     description: "Remote Desktop connections must require NLA before the session is established."
     rationale: "NLA authenticates the user before the RDP session is created, preventing pre-authentication attacks and reducing the attack surface."
     remediation: "Set UserAuthentication to 1 under HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp, or via Group Policy: Computer Configuration → Administrative Templates → Windows Components → Remote Desktop Services → Require NLA."
+    references:
+      - "ens:op.acc.6"
+      - "ens-level:basico"
+      - "iso27001-2022:8.5"
     compliance:
-      - ens: "op.acc.6"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.5"
+      nis2: ["21.2.i"]
     condition: all
     rules:
       - 'r:HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp -> UserAuthentication -> 1'
 
   - id: 31033
-    title: "Ensure WDigest authentication is disabled [op.acc.6] [Básico]"
-    description: "WDigest must be disabled to prevent plaintext credential storage in LSASS memory."
+    name: "Ensure WDigest authentication is disabled [op.acc.6] [Básico]"
+    description: "WDigest must not cache plaintext credentials in LSASS: UseLogonCredential must be absent (the default since Windows 8.1) or 0."
     rationale: "WDigest causes Windows to cache cleartext credentials in memory, enabling credential dumping. ENS op.acc.6 requires secure authentication mechanisms."
     remediation: "Set UseLogonCredential to 0 under HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest."
+    references:
+      - "ens:op.acc.6"
+      - "ens-level:basico"
+      - "iso27001-2022:8.5"
     compliance:
-      - ens: "op.acc.6"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.5"
-    condition: all
+      nis2: ["21.2.i"]
+    condition: any
     rules:
+      - 'not r:HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest -> UseLogonCredential'
       - 'r:HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest -> UseLogonCredential -> 0'
 
   # op.acc.3 — Segregación de funciones (cont.)
 
   - id: 31034
-    title: "Ensure UAC prompts administrators for consent or credentials [op.acc.3] [Básico]"
+    name: "Ensure UAC prompts administrators for consent or credentials [op.acc.3] [Básico]"
     description: "User Account Control must prompt for consent (2) or credentials (1) when elevating privileges."
     rationale: "ENS op.acc.3 requires segregation of functions. UAC prevents privilege escalation without explicit approval."
     remediation: "Set ConsentPromptBehaviorAdmin to 1 or 2 via Local Security Policy → Security Settings → Local Policies → Security Options → User Account Control."
+    references:
+      - "ens:op.acc.3"
+      - "ens-level:basico"
+      - "iso27001-2022:5.3"
     compliance:
-      - ens: "op.acc.3"
-      - ens_nivel: "Básico"
-      - iso_27001: "5.3"
+      nis2: ["21.2.i"]
     condition: all
     rules:
       - 'r:HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System -> ConsentPromptBehaviorAdmin -> r:^[1-2]$'
@@ -196,42 +212,49 @@ checks:
   # op.exp.2 — Configuración de seguridad (cont.)
 
   - id: 31102
-    title: "Ensure SMBv1 protocol is disabled [op.exp.2] [Básico]"
+    name: "Ensure SMBv1 protocol is disabled [op.exp.2] [Básico]"
     description: "The SMBv1 protocol must be disabled on the system."
     rationale: "SMBv1 contains critical vulnerabilities including EternalBlue (MS17-010). ENS op.exp.2 requires secure system configuration."
     remediation: "Set SMB1 to 0 under HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters, or run: Set-SmbServerConfiguration -EnableSMB1Protocol $false"
+    references:
+      - "ens:op.exp.2"
+      - "ens-level:basico"
+      - "iso27001-2022:8.9"
     compliance:
-      - ens: "op.exp.2"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.9"
-    condition: all
+      nis2: ["21.2.e"]
+    condition: any
     rules:
+      - 'not r:HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters -> SMB1'
       - 'r:HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters -> SMB1 -> 0'
 
   # op.exp.8 — Registro de actividad (cont.)
 
   - id: 31121
-    title: "Ensure PowerShell Script Block Logging is enabled [op.exp.8] [Básico]"
+    name: "Ensure PowerShell Script Block Logging is enabled [op.exp.8] [Básico]"
     description: "PowerShell script block logging must capture all executed script blocks."
     rationale: "Script block logging records executed PowerShell code and is essential for detecting obfuscated malicious scripts. ENS op.exp.8 requires user activity logging."
     remediation: "Enable via Group Policy: Computer Configuration → Administrative Templates → Windows Components → Windows PowerShell → Turn on PowerShell Script Block Logging."
+    references:
+      - "ens:op.exp.8"
+      - "ens-level:basico"
+      - "iso27001-2022:8.15"
     compliance:
-      - ens: "op.exp.8"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.15"
+      nis2: ["21.2.b"]
     condition: all
     rules:
       - 'r:HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging -> EnableScriptBlockLogging -> 1'
 
   - id: 31200
-    title: "Ensure Windows Time service syncs from a valid time source [op.exp.8] [Básico]"
+    name: "Ensure Windows Time service syncs from a valid time source [op.exp.8] [Básico]"
     description: "The W32Time service must be configured to use NTP, NT5DS, or AllSync as time source."
     rationale: "Accurate timestamps are required for audit log integrity. ENS op.exp.8 mandates reliable activity records that depend on synchronized time."
     remediation: "Configure W32Time: w32tm /config /manualpeerlist:<ntp-server> /syncfromflags:manual /reliable:YES /update && net stop w32time && net start w32time"
+    references:
+      - "ens:op.exp.8"
+      - "ens-level:basico"
+      - "iso27001-2022:8.15"
     compliance:
-      - ens: "op.exp.8"
-      - ens_nivel: "Básico"
-      - iso_27001: "8.15"
+      nis2: ["21.2.b"]
     condition: all
     rules:
       - 'r:HKLM\SYSTEM\CurrentControlSet\Services\W32Time\Parameters -> Type -> r:^(NTP|NT5DS|AllSync)$'
@@ -239,42 +262,49 @@ checks:
   # op.acc.6 — Nivel Medio
 
   - id: 31035
-    title: "Ensure LSASS runs as Protected Process Light [op.acc.6] [Medio]"
+    name: "Ensure LSASS runs as Protected Process Light [op.acc.6] [Medio]"
     description: "LSASS must be configured as a Protected Process Light (PPL) to prevent credential dumping."
     rationale: "PPL prevents unprotected processes from reading LSASS memory, blocking tools like Mimikatz. Required for ENS op.acc.6 Medio credential protection."
-    remediation: "Set RunAsPPL to 1 under HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa. Requires Secure Boot and may require a registry addition before enabling."
+    remediation: "Set RunAsPPL to 1 (with UEFI lock) or 2 (without UEFI lock, Windows 11 22H2+) under HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa and reboot."
+    references:
+      - "ens:op.acc.6"
+      - "ens-level:medio"
+      - "iso27001-2022:8.5"
     compliance:
-      - ens: "op.acc.6"
-      - ens_nivel: "Medio"
-      - iso_27001: "8.5"
+      nis2: ["21.2.i"]
     condition: all
     rules:
-      - 'r:HKLM\SYSTEM\CurrentControlSet\Control\Lsa -> RunAsPPL -> 1'
+      - 'r:HKLM\SYSTEM\CurrentControlSet\Control\Lsa -> RunAsPPL -> r:^[12]$'
 
   - id: 31036
-    title: "Ensure Virtualization Based Security is enabled [op.acc.6] [Medio]"
+    name: "Ensure Virtualization Based Security is enabled [op.acc.6] [Medio]"
     description: "Virtualization Based Security (VBS) must be enabled to support Credential Guard."
     rationale: "VBS uses hardware virtualization to isolate credential storage from the OS kernel, preventing credential theft even when the kernel is compromised."
     remediation: "Enable via Group Policy: Computer Configuration → Administrative Templates → System → Device Guard → Turn On Virtualization Based Security → Enabled."
+    references:
+      - "ens:op.acc.6"
+      - "ens-level:medio"
+      - "iso27001-2022:8.5"
     compliance:
-      - ens: "op.acc.6"
-      - ens_nivel: "Medio"
-      - iso_27001: "8.5"
-    condition: all
+      nis2: ["21.2.i"]
+    condition: any
     rules:
       - 'r:HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard -> EnableVirtualizationBasedSecurity -> 1'
+      - 'r:HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard -> EnableVirtualizationBasedSecurity -> 1'
 
   # mp.com.2 — Protección de la confidencialidad (cont.)
 
   - id: 31302
-    title: "Ensure RDP uses High or FIPS encryption [mp.com.2] [Medio]"
+    name: "Ensure RDP uses High or FIPS encryption [mp.com.2] [Medio]"
     description: "Remote Desktop connections must use High (3) or FIPS-compliant (4) encryption level."
     rationale: "ENS mp.com.2 requires confidentiality of communications. Low or client-compatible RDP encryption can be downgraded by an attacker."
     remediation: "Set MinEncryptionLevel to 3 or 4 under HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp, or via Group Policy."
+    references:
+      - "ens:mp.com.2"
+      - "ens-level:medio"
+      - "iso27001-2022:8.24"
     compliance:
-      - ens: "mp.com.2"
-      - ens_nivel: "Medio"
-      - iso_27001: "8.24"
+      nis2: ["21.2.h"]
     condition: all
     rules:
       - 'r:HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp -> MinEncryptionLevel -> r:^[3-4]$'

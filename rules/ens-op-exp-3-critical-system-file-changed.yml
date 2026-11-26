@@ -1,0 +1,80 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "6b72431a-b9cf-4408-8ee8-34706c842dd5"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "db6d6e53-fc66-42f7-a1db-68271953073b"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "high"
+
+metadata:
+  title: "ENS op.exp.3: Critical system file changed"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    File integrity monitoring saw a critical account, privilege or SSH configuration file created,
+    modified or deleted. Evidence for ENS op.exp.3 (configuration management) and op.exp.5 (change
+    management). Only fires for paths the agent's syscheck configuration actually watches.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100302"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection and (paths_exact or paths_prefix or paths_authorized_keys)"
+  selection:
+    wazuh.integration.name: "wazuh-fim"
+    event.action:
+      - "created"
+      - "modified"
+      - "deleted"
+  paths_exact:
+    file.path:
+      - "/etc/passwd"
+      - "/etc/shadow"
+      - "/etc/group"
+      - "/etc/gshadow"
+      - "/etc/sudoers"
+      - "/etc/ssh/sshd_config"
+  paths_prefix:
+    file.path|startswith:
+      - "/etc/sudoers.d/"
+      - "/etc/ssh/sshd_config.d/"
+  paths_authorized_keys:
+    file.path|endswith: "/.ssh/authorized_keys"
+
+mitre:
+  tactic:
+    - "TA0003"
+    - "TA0004"
+  technique:
+    - "T1098"
+    - "T1548"
+  subtechnique:
+    - "T1098.004"
+    - "T1548.003"
+
+compliance:
+  nis2:
+    - "21.2.e"
+
+tags:
+  - "ens.op.exp.3"
+  - "ens.op.exp.5"
+  - "ens.op.acc.4"
+  - "iso27001-2022.8.9"
+  - "iso27001-2022.8.32"
+  - "attack.persistence"
+  - "attack.privilege-escalation"
+
+falsepositives:
+  - "Package upgrades"
+  - "Approved account or sudoers changes"

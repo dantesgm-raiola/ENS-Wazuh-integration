@@ -1,0 +1,57 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "adf55b37-5802-4b4d-a45b-7ab1414903c0"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "97c6ad2a-5f8a-4526-afa6-ad51a5b174f6"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "informational"
+
+metadata:
+  title: "ENS op.acc.1: SSH session opened"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    An SSH login session was opened (pam_unix sshd:session). Records who accessed the host remotely
+    for ENS op.acc.1 (identification) and op.acc.7 (remote access).
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100201"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection"
+  selection:
+    wazuh.integration.name: "linux"
+    process.name: "sshd"
+    event.action: "logged-in"
+
+mitre:
+  tactic:
+    - "TA0001"
+  technique:
+    - "T1078"
+  subtechnique: []
+
+compliance:
+  nis2:
+    - "21.2.i"
+
+tags:
+  - "ens.op.acc.1"
+  - "ens.op.acc.7"
+  - "iso27001-2022.5.16"
+  - "iso27001-2022.6.7"
+  - "attack.initial-access"
+  - "attack.t1078"
+
+falsepositives:
+  - "Routine administrative logins"

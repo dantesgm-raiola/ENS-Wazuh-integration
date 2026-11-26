@@ -3,9 +3,9 @@
 ## Reporting a vulnerability
 
 If you find a security issue in this project (e.g. a credential-handling
-problem in `tools/sync_sca_to_opensearch.py`, a way an SCA check or
-detection rule could be manipulated to report false compliance, or an
-installer script doing something unsafe to `ossec.conf`), please **do not
+problem in `tools/deploy_rules.py`, a way an SCA check or detection rule
+could be manipulated to report false compliance, or an installer script
+doing something unsafe on the manager), please **do not
 open a public GitHub issue**. Instead, use GitHub's
 [private vulnerability reporting](https://github.com/fredycibersec/ENS-Wazuh-integration/security/advisories/new)
 for this repository, or contact the maintainer directly.
@@ -17,28 +17,26 @@ Please include:
 
 ## Credentials handling
 
-`tools/sync_sca_to_opensearch.py` needs a Wazuh API user and an OpenSearch
-admin user to poll check-level SCA data and index it. It reads these,
-in order of priority:
+Only `tools/deploy_rules.py` needs credentials: an Indexer user allowed to use the
+content-manager and Security Analytics APIs. It takes the password from the
+`ENS_INDEXER_PASSWORD` environment variable or an interactive prompt, or uses a client
+certificate instead. It never prints or logs the password, verifies TLS unless you pass
+`--insecure`, and talks only to the Indexer you name. `install.sh` and `uninstall.sh` use
+the manager's local `agent_groups` tool and need no credentials.
 
-1. `WAZUH_USER` / `WAZUH_PASS` / `OS_USER` / `OS_PASS` environment variables
-2. Automatically, from `wazuh-install-files.tar` (the file Wazuh's own
-   all-in-one installer generates), if found under `/root`, `/home/*`,
-   `/tmp`, or `/var/tmp`
+The 4.x sync tool, which read every stack password from `wazuh-install-files.tar`, is not
+part of the 5.x version.
 
-Neither this script nor any other file in this repository sends those
-credentials anywhere except the Wazuh API and your own OpenSearch instance
-— there is no telemetry and no third-party service involved.
+When reporting a bug, always redact credentials and API responses before pasting them
+anywhere public.
 
-Because `wazuh-install-files.tar` has `700` permissions and typically
-contains every generated password for the stack, the sync tool (and the
-cron job `install_sync.sh` creates) runs as `root`. Review
-`tools/sync_sca_to_opensearch.py` yourself before running it with
-credentials you care about, as you should with any script that handles
-secrets — this is a community project, not an audited one.
+## Command checks on agents
 
-When reporting a bug, always redact credentials, API responses, and
-`wazuh-install-files.tar` contents before pasting them anywhere public.
+Many ENS checks run commands, so agents need `sca.remote_commands=1`
+(`tools/agent_enable_sca_commands.*`). That setting lets any SCA policy pushed from the
+manager run commands as root/SYSTEM on the agent. Anyone who can write to the manager's
+`etc/shared/` directory can then run code on every agent in the group. Enable it only where
+that is acceptable, and protect the manager accordingly.
 
 ## Compliance content is not a substitute for review
 

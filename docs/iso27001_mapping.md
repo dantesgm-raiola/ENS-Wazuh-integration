@@ -130,25 +130,17 @@ ISO controls; the most representative is listed first.
 | mp.info.4 | Firma electrónica | 8.24 Use of cryptography; 8.26 |
 | mp.info.5 | Sellos de tiempo | 8.26 Application security requirements |
 
-## Filtering by ISO 27001 in OpenSearch
+## Filtering by ISO 27001 in OpenSearch (Wazuh 5.x)
 
-- **Per-control detail (recommended):** query the `ens-sca-checks` index —
-  `ens.check.compliance.iso_27001: "8.24"`. This index is populated by
-  `tools/sync_sca_to_opensearch.py` polling the Wazuh API for a full snapshot
-  of every check on every run, so it always reflects the current state of all
-  96 checks. Use the `ens_sca_checks_dashboard.ndjson` dashboard (README
-  Phase 2) — it has dedicated ISO 27001 panels (compliance % by control,
-  per-control detail, per-agent drill-down, and an ENS↔ISO 27001 crosswalk
-  table).
-- **Do not** filter on `data.sca.check.compliance.iso_27001` in
-  `wazuh-alerts-*`: Wazuh only writes an individual check event there on the
-  first scan or when that check's result changes, never a full snapshot, so
-  results will be sparse and inconsistent depending on the time range. This
-  is also why those panels were removed from the main `ens_dashboard.ndjson`.
-- Detection rules: `rule.groups: ISO27001_8.24` (or `ISO27001_5.*`,
-  `ISO27001_8.*` wildcards for a whole family) — these query `wazuh-alerts-*`
-  safely, since rule-triggered alerts are indexed normally, not subject to
-  the SCA check-event sparsity issue above.
+- **SCA checks:** each check lists its ISO/IEC 27001:2022 control in `check.references` as
+  `iso27001-2022:<control>`. Query the `wazuh-states-sca` index, which always holds the current
+  result of every check: `check.references: "iso27001-2022:8.24"`.
+- **Do not** use `check.compliance.iso_27001` for these values. That field is filled by Wazuh's
+  own CIS policies with ISO/IEC 27001:2013 numbers (`A.12.1.1`, see the compatibility note
+  above); this project keeps 2022 numbering out of it so the field stays consistent.
+- **Detection rules:** findings in `wazuh-findings-v5-*` carry `wazuh.rule.tags:
+  iso27001-2022.<control>` (for example `iso27001-2022.8.15`, or `iso27001-2022.8.*` for a
+  whole theme).
 
 ## Maintenance
 

@@ -1,0 +1,70 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: ""
+integration_id: ""
+space: ""
+detector: ""
+sa_native_id: ""
+detector_index: "wazuh-events-v5-system-activity"
+# Modern OpenSSH (Debian 13) logs as sshd-session, which the standard decoders leave in
+# wazuh-events-v5-unclassified; those failures are NOT covered (see the doc's gap list).
+
+# Disabled by default: ~581k matching events in 90 days across 24 agents on the reference
+# deployment (Internet SSH scanning). deploy_rules.py skips it unless --include-disabled.
+enabled: false
+status: "experimental"
+level: "low"
+
+metadata:
+  title: "ENS op.acc.6: Authentication failure"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    Failed authentication on a Linux host (sshd via the standard linux integration, both 'Failed
+    password' and pam_unix auth failures) or on Windows (Security 4625). Evidence for ENS op.acc.6
+    (authentication mechanism) and op.acc.1. High volume on Internet-facing SSH servers: use the
+    Alerting bucket monitors described in docs/detection_rules_5x.md for brute-force thresholds;
+    this rule records each failure.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100200"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection_linux or selection_windows"
+  selection_linux:
+    wazuh.integration.name: "linux"
+    process.name: "sshd"
+    event.category: "authentication"
+    event.outcome: "failure"
+  selection_windows:
+    wazuh.integration.name: "windows"
+    event.action: "authentication-failure"
+
+mitre:
+  tactic:
+    - "TA0006"
+  technique:
+    - "T1110"
+  subtechnique: []
+
+compliance:
+  nis2:
+    - "21.2.i"
+    - "21.2.j"
+
+tags:
+  - "ens.op.acc.6"
+  - "ens.op.acc.1"
+  - "iso27001-2022.8.5"
+  - "iso27001-2022.5.16"
+  - "attack.credential-access"
+  - "attack.t1110"
+
+falsepositives:
+  - "Users mistyping passwords"
+  - "Internet background SSH scanning (thousands per month on public servers)"

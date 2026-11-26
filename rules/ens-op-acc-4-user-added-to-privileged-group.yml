@@ -1,0 +1,83 @@
+# Deployment state, written by tools/deploy_rules.py (only these five lines are rewritten).
+# The content-manager API has no read endpoint, so these lines are the local record of what is
+# deployed. Empty values mean "never deployed". `detector_index` is deploy config, not sent to the API.
+document_id: "7871dc86-dc0d-4462-aa7b-333fc5ec773f"
+integration_id: "3e365fa4-836b-48cc-b87f-8d86bbf4c317"
+space: "custom"
+detector: "_YjnFKIBHEAyeSYys-7s"
+sa_native_id: "ad216338-71b6-417b-9968-972de887da34"
+detector_index: "wazuh-events-v5-system-activity"
+
+enabled: true
+status: "experimental"
+level: "high"
+
+metadata:
+  title: "ENS op.acc.4: Member added to privileged group"
+  author: "ENS-Wazuh-integration"
+  date: "2026-11-25"
+  modified: "2026-11-25"
+  description: >-
+    A member was added to a privileged group: Linux usermod/gpasswd adding to sudo, wheel, adm or
+    root, or Windows 4732/4728/4756 into Administrators, Backup Operators, Domain Admins, Schema
+    Admins or Enterprise Admins. Evidence for ENS op.acc.4 and op.acc.3. Fixes the 4.x rule, which
+    hooked rule 5905 (useradd failed, stock level 0) and raised it to level 9.
+  references:
+    - "Migrated from ENS-Wazuh-integration 4.x rule 100233"
+    - "https://www.boe.es/buscar/act.php?id=BOE-A-2022-7191"
+
+logsource:
+  product: "ens-compliance"
+
+detection:
+  condition: "selection_linux or selection_windows_builtin or selection_windows_domain"
+  selection_linux:
+    wazuh.integration.name: "linux"
+    process.name:
+      - "usermod"
+      - "gpasswd"
+    message|contains:
+      - "group 'sudo'"
+      - "group 'wheel'"
+      - "group 'adm'"
+      - "group 'root'"
+  selection_windows_builtin:   # Administrators, Backup Operators
+    wazuh.integration.name: "windows"
+    event.action: "user-added-to-group"
+    group.id:
+      - "S-1-5-32-544"
+      - "S-1-5-32-551"
+  selection_windows_domain:   # Domain Admins (-512), Schema Admins (-518), Enterprise Admins (-519)
+    wazuh.integration.name: "windows"
+    event.action: "user-added-to-group"
+    group.id|endswith:
+      - "-512"
+      - "-518"
+      - "-519"
+
+mitre:
+  tactic:
+    - "TA0003"
+    - "TA0004"
+  technique:
+    - "T1098"
+  subtechnique:
+    - "T1098.007"
+
+compliance:
+  nis2:
+    - "21.2.i"
+
+tags:
+  - "ens.op.acc.4"
+  - "ens.op.acc.3"
+  - "iso27001-2022.5.18"
+  - "iso27001-2022.8.2"
+  - "iso27001-2022.5.3"
+  - "attack.persistence"
+  - "attack.privilege-escalation"
+  - "attack.t1098.007"
+
+falsepositives:
+  - "Approved admin onboarding"
+  - "Lenovo Vantage / System Update creates, adds to Administrators and deletes temporary local accounts named lenovo_tmp_* (seen 2026-08..11 on GR-*/RN-* laptops). The member SID is not resolved (user.target.name '-'), so these cannot be filtered out and account for most Windows hits."
